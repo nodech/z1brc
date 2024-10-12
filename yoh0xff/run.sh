@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-echo "Hello World"
+./yoh0xff/target/release/yoh0xff $1
