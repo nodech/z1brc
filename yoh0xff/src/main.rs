@@ -50,7 +50,6 @@ fn main() {
  */
 fn execute(file_path: &String) -> Result<CityStats, io::Error> {
     let offsets = calc_file_offsets(file_path)?;
-    // println!("Offsets: {:?}", offsets);
     let mut interim_results = vec![];
 
     let cpu_cores = query_cpu_cores();
@@ -94,16 +93,10 @@ fn process_file_chunk(file_path: &String, offset: (u64, u64)) -> Result<CityStat
 
     let mut chunk = vec![];
 
-    loop {
-        let mut content = String::new();
-        let n = reader.read_line(&mut content)?;
-        if n == 0 {
-            break;
-        }
-        content = String::from(content.trim());
+    for try_line in reader.lines() {
+        let content = try_line?;
 
-        // println!("Start: {}, {},  End: {}", start, content, end);
-        total_bytes += n as u64;
+        total_bytes += content.len() as u64 + 1;
 
         let (city, data) = process_line(&content)?;
         chunk.push((city.clone(), data));
@@ -181,10 +174,8 @@ fn calc_file_offsets(file_path: &String) -> Result<Vec<(u64, u64)>, io::Error> {
 
     let file = File::open(file_path)?;
     let file_size = file.metadata()?.len();
-    // println!("File size: {}", file_size);
     let cpu_cores = query_cpu_cores();
     let chunk_size = file_size / cpu_cores as u64;
-    // println!("Chunk size: {}", chunk_size);
 
     let mut reader = BufReader::new(file);
     let mut start = 0;
