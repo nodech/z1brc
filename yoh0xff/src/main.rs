@@ -4,16 +4,16 @@ use std::process::exit;
 use std::{env, fs::File};
 
 struct Stats {
-    min: f32,
-    max: f32,
-    avg: f32,
+    min: f64,
+    max: f64,
+    avg: f64,
 }
 
 type CityStats = HashMap<String, Stats>;
 
-type AvgDataMap = HashMap<String, (f32, u32)>;
+type AvgDataMap = HashMap<String, (f64, u64)>;
 
-type DataPoint = (String, f32);
+type DataPoint = (String, f64);
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -24,6 +24,10 @@ fn main() {
     }
 
     let file_path: String = args[1].clone();
+    execute_in_single_thread(&file_path);
+}
+
+fn execute_in_single_thread(file_path: &String) {
     let file = match File::open(file_path) {
         Ok(file) => file,
         Err(error) => {
@@ -70,7 +74,7 @@ fn process_file(file: &File) -> CityStats {
 
     for (city, stats) in city_stats.iter_mut() {
         let (sum, count) = avg_data_map.get(city).unwrap_or(&(0.0, 0));
-        stats.avg = ((*sum / *count as f32) * 100.0).round() / 100.0;
+        stats.avg = ((*sum / *count as f64) * 100.0).round() / 100.0;
     }
 
     return city_stats;
@@ -89,7 +93,7 @@ fn process_line(line: &String) -> DataPoint {
         println!("Invalid number format: {}", error);
         exit(1);
     }
-    let data: f32 = try_data.unwrap();
+    let data: f64 = try_data.unwrap();
 
     return (city, data);
 }
