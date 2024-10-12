@@ -2,9 +2,7 @@
 
 FILE=$1
 
-if [ -f $FILE ]; then
-    echo "File $FILE exists."
-else
+if [ ! -f $FILE ]; then
     echo "File $FILE does not exist."
 fi
 
