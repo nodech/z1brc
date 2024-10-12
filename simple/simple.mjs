@@ -41,5 +41,5 @@ const names = Array.from(cities.keys()).sort();
 for (const name of names) {
   const cityData = cities.get(name);
   const avg = (cityData.sum / cityData.count).toFixed(2);
-  console.log(`${name};${cityData.min};${cityData.max};${avg}`);
+  console.log(`${name};${cityData.min.toFixed(2)};${cityData.max.toFixed(2)};${avg}`);
 }
