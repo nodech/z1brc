@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 
-# Install nodejs ?
-apt-get install nodejs
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+
+nvm install 22
+nvm use 22
