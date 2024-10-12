@@ -25,11 +25,15 @@ if (isMainThread) {
 async function mainThread() {
   const stat = fs.statSync(measurementFile);
 
-  const cpuCount = cpus().length;
+  let cpuCount = cpus().length;
   const splitSize = Math.ceil(stat.size / cpuCount);
   const fd = await fs.promises.open(measurementFile, 'r');
   const readBuffer = Buffer.alloc(60); // should be big enough to find line.
   const points = [];
+
+  if (stat.size / BUFFER_SIZE < cpuCount) {
+    cpuCount = Math.ceil(stat.size / BUFFER_SIZE);
+  }
 
   // find new lines in the file.
   let prev = 0;
@@ -47,6 +51,7 @@ async function mainThread() {
   }
 
   await fd.close();
+
 
   const workers = [];
   for (let i = 0; i < cpuCount; i++) {
@@ -86,7 +91,11 @@ async function mainThread() {
 }
 
 async function workerThread() {
-  const readBuffer = Buffer.alloc(BUFFER_SIZE);
+  // const readBuffer = Buffer.alloc(BUFFER_SIZE);
+  const readBuffers = [
+    Buffer.alloc(BUFFER_SIZE),
+    Buffer.alloc(BUFFER_SIZE)
+  ]
 
   const { file, start, end } = workerData;
   const fd = await fs.promises.open(file, 'r');
@@ -98,9 +107,22 @@ async function workerThread() {
   let currentNumberLength = 0;
   let state = STATE_NAME;
 
-  for (let i = start; i <= end; i += BUFFER_SIZE) {
-    const readSize = Math.min(BUFFER_SIZE, end - i + 1);
-    const { bytesRead } = await fd.read(readBuffer, 0, readSize, i);
+  let readPromise = fd.read(readBuffers[0], 0, BUFFER_SIZE, start);
+  let bufferCounter = 0;
+  let tip = start;
+
+  while (true) {
+    let nextStart = tip + BUFFER_SIZE;
+
+    const currentBuffer = readBuffers[bufferCounter % 2];
+    bufferCounter++;
+    const nextBuffer = readBuffers[bufferCounter % 2];
+    const { bytesRead } = await readPromise;
+
+    if (nextStart < end) {
+      const readSize = Math.min(BUFFER_SIZE, end - nextStart + 1);
+      readPromise = fd.read(nextBuffer, 0, readSize, nextStart);
+    }
 
     if (bytesRead === 0) {
       break;
@@ -109,17 +131,17 @@ async function workerThread() {
     for (let i = 0; i < bytesRead; i ++) {
       switch (state) {
         case STATE_NAME: {
-          if (readBuffer[i] === CHAR_SEMI) {
+          if (currentBuffer[i] === CHAR_SEMI) {
             state = STATE_VALUE;
             continue;
           }
 
-          currentName[currentNameLength++] = readBuffer[i];
+          currentName[currentNameLength++] = currentBuffer[i];
           break;
         }
 
         case STATE_VALUE: {
-          if (readBuffer[i] === CHAR_NL) {
+          if (currentBuffer[i] === CHAR_NL) {
             state = STATE_NAME;
 
             // process final shit.
@@ -146,14 +168,18 @@ async function workerThread() {
             continue;
           }
 
-          currentNumber[currentNumberLength++] = readBuffer[i]
+          currentNumber[currentNumberLength++] = currentBuffer[i]
           break;
         }
       }
     }
 
-  }
+    tip += BUFFER_SIZE;
 
+    if (nextStart > end) {
+      break;
+    }
+  }
 
   parentPort.postMessage(map);
 

@@ -5,8 +5,7 @@ import fs from 'fs';
 const measurementFile = process.argv[2];
 const MAX_NAME_LENGTH = 50;
 
-const CHUNK_SIZE = 1024;
-// const CHUNK_SIZE = 1024 * 1024; // 1MB
+const CHUNK_SIZE = 1024 * 1024; // 1MB
 const CHAR_SEMI = ';'.charCodeAt(0);
 const CHAR_NL = '\n'.charCodeAt(0);
 
