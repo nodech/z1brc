@@ -12,21 +12,21 @@ if [ ! -x "$FILE" ]; then
     exit 1 
 fi
 
-diff -y <($FILE ./examples/measurements.txt) ./examples/results.txt
+diff <($FILE ./examples/measurements.txt) ./examples/results.txt
 
 if [ $? -ne 0 ]; then
     echo "Test ./examples/results.txt failed."
     exit 1
 fi
 
-diff -y <($FILE ./examples/measurements2.txt) ./examples/results2.txt
+diff <($FILE ./examples/measurements2.txt) ./examples/results2.txt
 
 if [ $? -ne 0 ]; then
     echo "Test ./examples/results2.txt failed."
     exit 1
 fi
 
-diff -y <($FILE ./examples/measurements3.txt) ./examples/results3.txt
+diff <($FILE ./examples/measurements3.txt) ./examples/results3.txt
 
 if [ $? -ne 0 ]; then
     echo "Test ./examples/results3.txt failed."
