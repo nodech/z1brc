@@ -7,4 +7,4 @@ if [ ! -f $FILE ]; then
 fi
 
 # Run the script with the following command:
-deno run -A --unstable-worker-options ./ez/ez-v3.ts $FILE
+deno run -A --unstable-worker-options ./ez/ez-v4.ts $FILE
