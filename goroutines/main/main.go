@@ -131,8 +131,8 @@ func main() {
 	check(err)
 	fileSize := fileInfo.Size()
 
-	go_routines_count := 8
-	fileChunkSize := fileSize / int64(8)
+	go_routines_count := 10
+	fileChunkSize := fileSize / int64(go_routines_count)
 
 	var wg sync.WaitGroup
 	results := make(chan map[string]CityInfo, go_routines_count)
