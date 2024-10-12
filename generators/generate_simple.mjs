@@ -28,7 +28,15 @@ const names = Array.from({ length: NAMES }, () => `city-${(cityCounter++).toStri
 const getRandCity = () => names[Math.floor(Math.random() * NAMES)];
 const getRandTemp = () => (Math.random() * 200 - 100).toFixed(2);
 
-const writeStream = fs.createWriteStream(OUTPUT);
+const fd = await fs.promises.open(OUTPUT, 'w');
 
-for (let i = 0; i < LINES; i++)
-  writeStream.write(`${getRandCity()};${getRandTemp()}\n`);
+const percent1 = Math.floor(LINES / 100);
+
+for (let i = 0; i < LINES; i++) {
+  await fd.write(`${getRandCity()};${getRandTemp()}\n`);
+
+  if (i % percent1 === 0)
+    console.log(`${i} lines written ${Math.floor(i / LINES * 100)}%`);
+}
+
+await fd.close();
