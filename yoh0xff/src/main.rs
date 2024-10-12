@@ -91,15 +91,12 @@ fn process_file_chunk(file_path: &String, offset: (u64, u64)) -> Result<CityStat
     let mut reader = BufReader::new(file);
     reader.seek(SeekFrom::Start(start))?;
 
-    let mut chunk = vec![];
-
     for try_line in reader.lines() {
         let content = try_line?;
 
         total_bytes += content.len() as u64 + 1;
 
         let (city, data) = process_line(&content)?;
-        chunk.push((city.clone(), data));
 
         let stats = city_interim_stats.entry(city.clone()).or_insert(Stats {
             min: data,
