@@ -8,7 +8,7 @@ Name;temperature
 Name;temperature
 ```
 
-Name: 1-50 characters, a-zA-Z0-9-
+Name: 1-50 characters, a-zA-Z0-9-  
 Temperature: -100.00 to 100.00 with 2 decimal places
 
 Example from [./samples/measurements.txt](./samples/measurements.txt):
