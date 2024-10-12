@@ -88,12 +88,14 @@ async function mainThread() {
   for (const name of names) {
     const cityData = reduced.get(name);
     const avg = (cityData.sum / cityData.count).toFixed(2);
-    console.log(`${name};${cityData.min.toFixed(2)};${cityData.max.toFixed(2)};${avg}`);
+    const min = (cityData.min).toFixed(2);
+    const max = (cityData.max).toFixed(2);
+    // console.log(cityData.sum, cityData.count, avg, '...');
+    console.log(`${name};${min};${max};${avg}`);
   }
 }
 
 async function workerThread() {
-  // const readBuffer = Buffer.alloc(BUFFER_SIZE);
   const readBuffers = [
     Buffer.alloc(BUFFER_SIZE),
     Buffer.alloc(BUFFER_SIZE)
@@ -148,7 +150,6 @@ async function workerThread() {
 
             // process final shit.
             const name = currentName.toString('utf8', 0, currentNameLength);
-            // const temp = +currentNumber.slice(0, currentNumberLength).toString();
             const temp = buffer2intfloat(currentNumber, currentNumberLength);
             currentNameLength = 0;
             currentNumberLength = 0;
