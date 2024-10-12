@@ -1,17 +1,16 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::process::exit;
+use std::thread::{available_parallelism, spawn};
 use std::{env, fs::File};
 
+#[derive(Debug)]
 struct Stats {
     min: f64,
     max: f64,
-    avg: f64,
+    avg: (f64, i64),
 }
-
 type CityStats = HashMap<String, Stats>;
-
-type AvgDataMap = HashMap<String, (f64, u64)>;
 
 type DataPoint = (String, f64);
 
@@ -24,76 +23,199 @@ fn main() {
     }
 
     let file_path: String = args[1].clone();
-    execute_in_single_thread(&file_path);
-}
-
-fn execute_in_single_thread(file_path: &String) {
-    let file = match File::open(file_path) {
-        Ok(file) => file,
+    let city_stats = match execute(&file_path) {
+        Ok(result) => result,
         Err(error) => {
-            println!("Failed to read the file: {}", error);
+            println!("Execution failed: {}", error);
             exit(1);
         }
     };
 
-    let city_stats = process_file(&file);
     let mut sorted_cities: Vec<(&String, &Stats)> = city_stats.iter().collect();
     sorted_cities.sort_by_key(|&(key, _)| key);
 
     for (city, stats) in sorted_cities {
-        println!("{};{:.2};{:.2};{:.2}", city, stats.min, stats.max, stats.avg);
+        println!(
+            "{};{:.2};{:.2};{:.2}",
+            city,
+            stats.min,
+            stats.max,
+            stats.avg.0 / stats.avg.1 as f64
+        );
     }
 }
 
-fn process_file(file: &File) -> CityStats {
-    let mut city_stats: CityStats = HashMap::new();
-    let mut avg_data_map: AvgDataMap = HashMap::new();
+/*******************************************************************************************************************
+ * Execution functions
+ */
+fn execute(file_path: &String) -> Result<CityStats, io::Error> {
+    let offsets = calc_file_offsets(file_path)?;
+    // println!("Offsets: {:?}", offsets);
+    let mut interim_results = vec![];
 
-    let reader = BufReader::new(file);
-    for try_line in reader.lines() {
-        if let Err(error) = try_line {
-            println!("Failed to read the line: {}", error);
-            exit(1);
+    let cpu_cores = query_cpu_cores();
+
+    // if page_size < 1000 {
+    //     execute_in_single_thread(file_path);
+    // } else {
+    //     execute_in_multi_threads(file_path);
+    // }
+
+    let mut handles = vec![];
+    for i in 0..cpu_cores {
+        let file_path_copy = file_path.clone();
+        let offsets_copy = offsets.clone();
+
+        let handle = spawn(move || process_file_chunk(&file_path_copy, offsets_copy[i]));
+
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        let interim_result = handle.join().unwrap()?;
+        interim_results.push(interim_result);
+    }
+
+    let final_result = merge_interim_results(&interim_results);
+    Ok(final_result)
+}
+
+/*******************************************************************************************************************
+ * Data processing functions
+ */
+fn process_file_chunk(file_path: &String, offset: (u64, u64)) -> Result<CityStats, io::Error> {
+    let mut city_interim_stats: CityStats = HashMap::new();
+    let mut total_bytes: u64 = 0;
+    let (start, end) = offset;
+
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+    reader.seek(SeekFrom::Start(start))?;
+
+    let mut chunk = vec![];
+
+    loop {
+        let mut content = String::new();
+        let n = reader.read_line(&mut content)?;
+        if n == 0 {
+            break;
         }
+        content = String::from(content.trim());
 
-        let content: String = try_line.unwrap();
-        let (city, data) = process_line(&content);
+        // println!("Start: {}, {},  End: {}", start, content, end);
+        total_bytes += n as u64;
 
-        let stats = city_stats.entry(city.clone()).or_insert(Stats {
-            min: 0.0,
-            max: 0.0,
-            avg: 0.0,
+        let (city, data) = process_line(&content)?;
+        chunk.push((city.clone(), data));
+
+        let stats = city_interim_stats.entry(city.clone()).or_insert(Stats {
+            min: data,
+            max: data,
+            avg: (0.0, 0),
         });
         stats.min = data.min(stats.min);
         stats.max = data.max(stats.max);
+        stats.avg.0 += data;
+        stats.avg.1 += 1;
 
-        let avg_data = avg_data_map.entry(city.clone()).or_insert((0.0, 0));
-        avg_data.0 = avg_data.0 + data;
-        avg_data.1 = avg_data.1 + 1;
+        if total_bytes >= (end - start) {
+            break;
+        }
     }
 
-    for (city, stats) in city_stats.iter_mut() {
-        let (sum, count) = avg_data_map.get(city).unwrap_or(&(0.0, 0));
-        stats.avg = ((*sum / *count as f64) * 100.0).round() / 100.0;
-    }
-
-    return city_stats;
+    Ok(city_interim_stats)
 }
 
-fn process_line(line: &String) -> DataPoint {
+fn process_line(line: &String) -> Result<DataPoint, io::Error> {
     let chunks: Vec<&str> = line.split(";").collect();
+
     if chunks.len() != 2 {
-        println!("Invalid line format, 'x;y' format is expected: {}", line);
-        exit(1);
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid line format, 'x;y' format is expected: {}", line),
+        ));
     }
 
     let city: String = String::from(chunks[0]);
-    let try_data = chunks[1].parse();
-    if let Err(error) = try_data {
-        println!("Invalid number format: {}", error);
-        exit(1);
-    }
-    let data: f64 = try_data.unwrap();
+    let data: f64 = match chunks[1].parse() {
+        Ok(result) => result,
+        Err(error) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid number format: {}", error),
+            ));
+        }
+    };
 
-    return (city, data);
+    Ok((city, data))
+}
+
+/*******************************************************************************************************************
+ * Utility functions
+ */
+fn merge_interim_results(interim_results: &Vec<CityStats>) -> CityStats {
+    let accumulated_interim_result =
+        interim_results
+            .into_iter()
+            .fold(CityStats::new(), |mut acc, interim_result| {
+                for (city, stats) in interim_result.iter() {
+                    let entry = acc.entry(city.clone()).or_insert(Stats {
+                        min: stats.min,
+                        max: stats.max,
+                        avg: (0.0, 0),
+                    });
+
+                    entry.min = entry.min.min(stats.min);
+                    entry.max = entry.max.max(stats.max);
+                    entry.avg.0 += stats.avg.0;
+                    entry.avg.1 += stats.avg.1;
+                }
+                acc
+            });
+
+    accumulated_interim_result
+}
+
+fn calc_file_offsets(file_path: &String) -> Result<Vec<(u64, u64)>, io::Error> {
+    let mut offsets = vec![];
+
+    let file = File::open(file_path)?;
+    let file_size = file.metadata()?.len();
+    // println!("File size: {}", file_size);
+    let cpu_cores = query_cpu_cores();
+    let chunk_size = file_size / cpu_cores as u64;
+    // println!("Chunk size: {}", chunk_size);
+
+    let mut reader = BufReader::new(file);
+    let mut start = 0;
+    for c in 0..cpu_cores {
+        let mut end: u64 = (c + 1) as u64 * chunk_size;
+
+        reader.seek(SeekFrom::Start(end))?;
+        let mut buffer = [0; 1];
+        // We try to find new line in next 100 characters
+        for _ in 0..100 {
+            let n = reader.read(&mut buffer)?;
+
+            if n == 0 {
+                break;
+            }
+
+            if buffer[0] == b'\n' {
+                break;
+            }
+
+            end += 1;
+        }
+
+        offsets.push((start, end));
+        start = end + 1;
+    }
+
+    return Ok(offsets);
+}
+
+fn query_cpu_cores() -> usize {
+    let cpu_cores = available_parallelism().map(|x| x.get()).unwrap_or(1);
+    return cpu_cores;
 }
