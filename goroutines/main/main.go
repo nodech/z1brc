@@ -131,7 +131,7 @@ func main() {
 	check(err)
 	fileSize := fileInfo.Size()
 
-	go_routines_count := 5
+	go_routines_count := 8
 	fileChunkSize := fileSize / int64(8)
 
 	var wg sync.WaitGroup
