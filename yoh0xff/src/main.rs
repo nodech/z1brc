@@ -180,16 +180,14 @@ fn calc_file_offsets(file_path: &String) -> Result<Vec<(u64, u64)>, io::Error> {
         let mut end: u64 = (c + 1) as u64 * chunk_size;
 
         reader.seek(SeekFrom::Start(end))?;
-        let mut buffer = [0; 1];
+        let mut buffer = [0; 100];
+        let n = reader.read(&mut buffer)?;
+        if n == 0 {
+            continue;
+        }
         // We try to find new line in next 100 characters
-        for _ in 0..100 {
-            let n = reader.read(&mut buffer)?;
-
-            if n == 0 {
-                break;
-            }
-
-            if buffer[0] == b'\n' {
+        for i in 0..n {
+            if buffer[i] == b'\n' {
                 break;
             }
 
