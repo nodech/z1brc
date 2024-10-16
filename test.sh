@@ -9,7 +9,7 @@ fi
 
 if [ ! -x "$FILE" ]; then
     echo "File $FILE is not executable."
-    exit 1 
+    exit 1
 fi
 
 diff <($FILE ./examples/measurements.txt) ./examples/results.txt
